@@ -142,4 +142,4 @@ Le cluster dispose de 4 cœurs (2 Workers × 2 cœurs, 2 Go chacun). Les noteboo
 | Rien n'apparaît dans les tables Gold | La fenêtre de 10 min doit avoir reçu des données ; la table Delta est créée au premier micro-batch non vide. |
 | Repartir de zéro | `docker compose down -v`, puis `./scripts/00_init.sh` |
 
-Projet réalisé en binôme : _Nom 1_ / _Nom 2_.
+Projet réalisé en binôme : Yousra Erraki – Rania Bennani.
