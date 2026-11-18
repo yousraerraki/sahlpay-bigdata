@@ -7,8 +7,7 @@ name: sahlpay
 
 x-spark-common: &spark-common
   image: sahlpay/spark:3.5.3
-  build:
-    context: ./docker/spark
+  pull_policy: never          # image locale, construite une seule fois par le service spark-master
   networks: [sahlpay]
   restart: unless-stopped
 
@@ -61,8 +60,11 @@ services:
     restart: "no"
 
   # ------------------------------------------------------------------ MinIO (couches Bronze / Silver / Gold)
+  # Les images minio/minio et minio/mc ont ete supprimees de Docker Hub et quay.io (sept. 2026).
+  # On utilise pgsty/silo : build communautaire du meme serveur MinIO (API S3 + console web,
+  # memes variables MINIO_ROOT_USER / MINIO_ROOT_PASSWORD, client "mcli" = mc).
   minio:
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    image: ${MINIO_IMAGE:-pgsty/silo:RELEASE.2026-09-16T00-00-00Z}
     container_name: minio
     hostname: minio
     networks: [sahlpay]
@@ -75,41 +77,45 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin123
     volumes:
       - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
+      - ./data:/import:ro      # pour copier les fichiers locaux dans le lac (mcli cp /import/...)
     restart: unless-stopped
 
-  # Creation du bucket "lake" puis arret du conteneur
+  # Creation du bucket "lake" (client S3 officiel AWS CLI) puis arret du conteneur
   minio-init:
-    image: ${MC_IMAGE:-minio/mc:latest}
+    image: ${AWS_CLI_IMAGE:-amazon/aws-cli:latest}
     container_name: minio-init
     networks: [sahlpay]
-    depends_on:
-      minio:
-        condition: service_healthy
+    depends_on: [minio]
+    environment: &aws-env
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        mc alias set local http://minio:9000 minioadmin minioadmin123
-        mc mb --ignore-existing local/lake
-        mc ls local
+        until aws --endpoint-url http://minio:9000 s3 ls > /dev/null 2>&1; do echo "attente de MinIO..."; sleep 2; done
+        aws --endpoint-url http://minio:9000 s3 mb s3://lake 2>/dev/null || echo "bucket lake deja present"
+        aws --endpoint-url http://minio:9000 s3 ls
     restart: "no"
 
-  # Client MinIO a la demande :  docker compose run --rm mc ls --recursive local/lake/
-  mc:
-    image: ${MC_IMAGE:-minio/mc:latest}
+  # Client S3 a la demande, ex. :  docker compose run --rm aws s3 ls --recursive s3://lake/
+  aws:
+    image: ${AWS_CLI_IMAGE:-amazon/aws-cli:latest}
     profiles: ["tools"]
     networks: [sahlpay]
+    environment: *aws-env
     volumes:
       - ./data:/data
-    entrypoint: ["/bin/sh", "-c", "mc alias set local http://minio:9000 minioadmin minioadmin123 > /dev/null && mc \"$$@\"", "--"]
+    entrypoint: ["aws", "--endpoint-url", "http://minio:9000"]
 
   # ------------------------------------------------------------------ Spark standalone : 1 Master + 2 Workers
   spark-master:
     <<: *spark-common
+    build:
+      context: ./docker/spark
     container_name: spark-master
     hostname: spark-master
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master",
@@ -118,7 +124,7 @@ services:
       SPARK_LOCAL_HOSTNAME: spark-master
       SPARK_NO_DAEMONIZE: "true"
     ports:
-      - "8080:8080"
+      - "8090:8080"
       - "7077:7077"
 
   spark-worker-1:
