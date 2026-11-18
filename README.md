@@ -1,4 +1,4 @@
-# SahlPay.ma : plateforme Big Data pour un portefeuille mobile
+﻿# SahlPay.ma : plateforme Big Data pour un portefeuille mobile
 
 Ce dépôt est le projet « Écosystème Big Data 2 » (5ème année EMSI, 2026-2027). Il contient une chaîne analytique complète qui va de Kafka aux tableaux de bord :
 
@@ -20,12 +20,13 @@ producer.py → Kafka (topic transactions, 3 partitions) → Spark Structured St
 | Connecteur Kafka | `spark-sql-kafka-0-10_2.12:3.5.3`, `kafka-clients:3.4.1` | |
 | Delta Lake | **3.2.1** (`delta-spark_2.12`, `delta-storage`) | Delta 3.2.x correspond à Spark 3.5.x |
 | GraphFrames | **0.8.4-spark3.5-s_2.12** (repli automatique sur 0.8.3) | package Spark Packages |
-| MinIO (S3) | `RELEASE.2025-04-22T22-12-26Z`, accès via `hadoop-aws:3.3.4` et `aws-java-sdk-bundle:1.12.262` | |
+| MinIO (S3) | image `pgsty/silo:RELEASE.2026-09-16T00-00-00Z` (build communautaire de MinIO), accès Spark via `hadoop-aws:3.3.4` et `aws-java-sdk-bundle:1.12.262` | images `minio/minio` et `minio/mc` retirées de Docker Hub en septembre 2026 |
+| Client S3 | `amazon/aws-cli` (bucket, copies) et `mcli` (client mc inclus dans l'image MinIO) | |
 | Python (libs) | jupyterlab 4.2, kafka-python ≥ 2.0.3, pandas, pyarrow, networkx, matplotlib | |
 
 Tous les jars sont téléchargés pendant `docker compose build` et placés dans `/opt/spark/jars`. Ils sont donc disponibles pour le driver comme pour les executors, sans `--packages`. Le module Python `graphframes` est extrait du jar et installé dans le `site-packages` de l'image (voir `docker/spark/Dockerfile`).
 
-> Si l'image MinIO indiquée n'est plus disponible, vous pouvez changer d'image sans toucher au fichier compose : `MINIO_IMAGE=minio/minio:latest docker compose up -d`. Le même mécanisme existe pour Kafka (`KAFKA_IMAGE`) et pour le client MinIO (`MC_IMAGE`).
+> Si l'image MinIO indiquée n'est plus disponible, vous pouvez changer d'image sans toucher au fichier compose : `MINIO_IMAGE=cgr.dev/chainguard/minio:latest docker compose up -d`. Le même mécanisme existe pour Kafka (`KAFKA_IMAGE`) et pour le client MinIO (`AWS_CLI_IMAGE`).
 
 ## 2. Arborescence
 
@@ -71,7 +72,7 @@ Prérequis : Docker Desktop (ou Docker Engine) avec Compose v2, au moins **8 Go 
 ```bash
 ./scripts/00_init.sh          # build + up + vérif topic (3 partitions), bucket lake, workers
 ```
-- Spark Master UI : http://localhost:8080 (on doit y voir **2 Workers ALIVE**)
+- Spark Master UI : http://localhost:8090 (on doit y voir **2 Workers ALIVE**)
 - MinIO console : http://localhost:9001 (identifiants `minioadmin` / `minioadmin123`, on doit y voir le bucket **lake**)
 - Jupyter : http://localhost:8888, puis exécuter `notebooks/01_cluster_positionnement.ipynb`
 - Spark UI de l'application en cours : http://localhost:4040 (puis 4041, etc. si plusieurs applications tournent)
@@ -119,7 +120,7 @@ Pour lancer GraphX seul : `./scripts/06_part6_graphx.sh`. Pour l'exécuter en ja
 Par défaut, la Partie 6 utilise **les deux couches Silver** (historique et flux). Pour changer ce comportement : `GRAPH_SOURCE=history` ou `GRAPH_SOURCE=stream` dans l'environnement du conteneur jupyter.
 
 ### Captures obligatoires (checklist)
-- [ ] Spark Master UI avec les 2 Workers actifs (port 8080)
+- [ ] Spark Master UI avec les 2 Workers actifs (port 8090)
 - [ ] DAG et stages dans la Spark UI (Parties 2 et 3)
 - [ ] Sortie de `explain(True)` (Partie 3, aussi dans `logs/explain_join_broadcast.txt`)
 - [ ] Sink console sur plusieurs micro-batches (Partie 4)
