@@ -1,0 +1,9 @@
+# donnees generees (regenerer avec ./scripts/01_generate_and_upload.sh)
+data/transactions_history.jsonl
+logs/*
+!logs/.gitkeep
+__pycache__/
+.ipynb_checkpoints/
+graphx/target/
+graphx/project/
+.env
